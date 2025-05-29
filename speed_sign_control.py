@@ -1,80 +1,76 @@
-#!/usr/bin/env python3
-
-import rospy
-from sensor_msgs.msg import Image
-from geometry_msgs.msg import Twist
-from cv_bridge import CvBridge
+from picamera2 import Picamera2
+import time
 import cv2
+from gpiozero import PWMOutputDevice
 from ultralytics import YOLO
 
 class SpeedSignController:
     def __init__(self):
-        rospy.init_node('speed_sign_controller', anonymous=True)
-        self.bridge = CvBridge()
-        self.model = YOLO("./tocdo_best.pt")
-        self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self.image_callback)
-        self.cmd_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
+        # Setup camera
+        self.picam2 = Picamera2()
+        config = self.picam2.create_preview_configuration(main={"format": "RGB888", "size": (640, 480)})
+        self.picam2.configure(config)
+        self.picam2.start()
+        time.sleep(2)
 
+        # Load YOLO model
+        self.model = YOLO("./tocdo_best.pt")
+
+        # Setup motor control using PWM
+        self.motor = PWMOutputDevice(pin=18)  # GPIO18 (Physical pin 12), thay b?ng pin di?u khi?n th?c t?
         self.current_speed = 0.1
-        self.rate = rospy.Rate(10)
+
+        # Main control loop
         self.control_loop()
 
-    def image_callback(self, msg):
-        # Convert ROS image to OpenCV
-        cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+    def capture_frame(self):
+        return self.picam2.capture_array()
 
-        # Xử lý hình ảnh đơn giản
-        processed_image = self.preprocess_image(cv_image)
-
-        # Nhận diện biển báo
-        results = self.model(processed_image)
-
-        detected_speed = None
+    def detect_speed(self, frame):
+        processed = self.preprocess_image(frame)
+        results = self.model(processed)
         for r in results:
             for box in r.boxes:
                 conf = float(box.conf)
                 if conf < 0.7:
-                    continue  # Bỏ qua nếu độ chính xác thấp
+                    continue
 
                 cls = r.names[int(box.cls)]
-
                 if "20" in cls:
-                    detected_speed = 0.2
-                    print("DDDDDDDDDDDDDetected: 20 (conf: {:.2f})".format(conf))
+                    print("Detected: 20 (conf: {:.2f})".format(conf))
+                    return 0.2
                 elif "40" in cls:
-                    detected_speed = 0.4
-                    print("DDDDDDDDDDDDDetected: 40 (conf: {:.2f})".format(conf))
+                    print("Detected: 40 (conf: {:.2f})".format(conf))
+                    return 0.4
                 elif "60" in cls:
-                    detected_speed = 0.6
-                    print("DDDDDDDDDDDDDetected: 60 (conf: {:.2f})".format(conf))
+                    print("Detected: 60 (conf: {:.2f})".format(conf))
+                    return 0.6
                 elif "80" in cls:
-                    detected_speed = 0.8
-                    print("DDDDDDDDDDDDDetected: 80 (conf: {:.2f})".format(conf))
-
-        if detected_speed is not None:
-            self.current_speed = detected_speed
+                    print("Detected: 80 (conf: {:.2f})".format(conf))
+                    return 0.8
+        return None
 
     def preprocess_image(self, img):
-        # Resize ảnh nhỏ lại để tăng tốc độ xử lý
         resized = cv2.resize(img, (640, 480))
-
-        # Làm mịn ảnh để loại bỏ nhiễu nhẹ
         blurred = cv2.GaussianBlur(resized, (5, 5), 0)
-
-        # Có thể thêm chuyển sang grayscale nếu model chấp nhận
-        # gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
-
         return blurred
 
+    def control_motor(self, speed):
+        self.motor.value = min(max(speed, 0.0), 1.0)
+
     def control_loop(self):
-        while not rospy.is_shutdown():
-            twist = Twist()
-            twist.linear.x = self.current_speed
-            self.cmd_pub.publish(twist)
-            self.rate.sleep()
+        try:
+            while True:
+                frame = self.capture_frame()
+                detected_speed = self.detect_speed(frame)
+                if detected_speed is not None:
+                    self.current_speed = detected_speed
+
+                self.control_motor(self.current_speed)
+                time.sleep(0.1)
+        except KeyboardInterrupt:
+            self.motor.value = 0
+            print("Stopped")
 
 if __name__ == '__main__':
-    try:
-        SpeedSignController()
-    except rospy.ROSInterruptException:
-        pass
+    SpeedSignController()
