@@ -11,7 +11,7 @@ class SpeedSignController:
     def __init__(self):
         rospy.init_node('speed_sign_controller', anonymous=True)
         self.bridge = CvBridge()
-        self.model = YOLO("/home/minhduc/catkin_ws/src/speed_sign_control/model/tocdo_best.pt")
+        self.model = YOLO("./tocdo_best.pt")
         self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self.image_callback)
         self.cmd_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
 
