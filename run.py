@@ -7,7 +7,7 @@ import RPi.GPIO as GPIO  # hoặc thư viện điều khiển motor khác
 cap = cv2.VideoCapture(0)
 
 # Khởi tạo model YOLO
-model = YOLO("/home/minhduc/catkin_ws/src/speed_sign_control/model/tocdo_best.pt")
+model = YOLO("./tocdo_best.pt")
 
 # Khởi tạo GPIO
 GPIO.setmode(GPIO.BCM)
