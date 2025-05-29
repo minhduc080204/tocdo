@@ -1,14 +1,5 @@
-catkin_make
+pip install opencv-python RPi.GPIO ultralytics
 
-export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:/home/minhduc/catkin_ws/src/turtlebot3_custom_speed_signs/models
+sudo apt install -y python3-picamera2
 
-source ~/.bashrc
-
-roslaunch turtlebot3_custom_speed_signs my_speed_world_with_camera.launch
-
-
-rosrun speed_sign_control speed_sign_control.py
-
-rosrun teleop_twist_keyboard teleop_twist_keyboard.py
-
-rqt_image_view
+source venv/bin/activate
